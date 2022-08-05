@@ -49,6 +49,7 @@ def query_aps():
     # string, fazendo uma conversão para lista separando no ";"
     lista_crua = ",".join(r[1:-1].split(",")[1:])[16:-6].split(";")
     # print(lista_crua)
+    # quebra a lista em uma nova lista de listas, com todos os caracteres de espaco removidos
     saida = list(map(lambda x: list(map(lambda y: y.strip(), x.split(","))), lista_crua))
     return saida
 
