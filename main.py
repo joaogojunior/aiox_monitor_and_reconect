@@ -20,7 +20,7 @@ urlpost = "http://" + config["router_IP"] + "/goform/wirelessMode"
 urlreboot = "http://" + config["router_IP"] + "/goform/SysToolReboot"
 
 
-# funcao que faz um request pra url no roteador e retorna lista de roteadores no formato [ssid, mac, canal,
+# funcao que faz um request pra url do roteador e retorna lista de APs no formato [ssid, mac, canal,
 # encriptação, sinal]
 def query_aps():
     r = "<Response [401]>"
@@ -28,12 +28,13 @@ def query_aps():
     # o loop é necessário pois o roteador aparentemente responde 401 na primeira tentativa por algum motivo.
     while str(r) == "<Response [401]>":
         try:
-            # na primeira vez as vezes retorna "<Response [401]>" e executa sem erros se ocorrer o loop executa novamente
+            # na primeira vez as vezes retorna "<Response [401]>" e executa sem erros, se isso ocorrer o loop é
+            # executado novamente.
             r = str(requests.get(urlwds, auth=(config["http_username"], config["http_password"])))
         except ConnectionError as e:
             # quando o request nao falha com 401, o roteador responde mas por alguma não conformidade com o protocolo
-            # http a resposta acaba causando com uma exceção, felizmente a resposta que o roteador forneceu é adicionada
-            # ao erro da excessão tornando possível capturar a exception para extrair a resposta
+            # http a resposta acaba causando com uma exceção, felizmente a resposta que o roteador forneceu é exposta
+            # tornando possível capturar o erro para extrair a resposta.
             r = str(e)
     # r = "('Connection aborted.', BadStatusLine('SSID1,ab:bc:cd:de:ef:ff,1,AES  ,100  ;
     # SSID2,00:11:22:33:44:55,11,TKIP ,34   ;SSID3,ff:fe:ed:dc:cb:ba,13,NONE ,0    \r\n'))"
@@ -47,7 +48,7 @@ def query_aps():
 
 
 def get_wifi_data():
-    # faz a pesquisa dos aps proximos e filtra os resultados para apenas mostrar do ssid fornecido
+    # faz a pesquisa dos APs proximos e filtra os resultados para apenas mostrar do ssid fornecido
     dados = query_aps()
     wifi_data = list(filter(lambda x: x[0] == config["ssid"], dados))[0]
     return wifi_data
@@ -81,6 +82,7 @@ def upload_wifi_data(wifi_data):
             'wlsSlt': 'radiobutton'
             }
     try:
+        # realiza o post para a url do roteador para salvar os dados da rede wifi no modo cliente
         r = requests.post(url=urlpost, data=data, auth=(config["http_username"], config["http_password"]))
         print("As configurações foram atualizadas!")
     except Exception as e:
@@ -88,7 +90,7 @@ def upload_wifi_data(wifi_data):
 
 
 def router_reboot():
-    # reinicia roteador. Como o roteador reinicia antes de responder ao GET request ocorre uma ConnectionError exception
+    # reinicia roteador. Como o roteador reinicia antes de responder ao GET ocorre uma ConnectionError exception
     # antes do codigo poder prosseguir...
     print("Reiniciando roteador com novas configurações... Isso pode demorar alguns instantes...")
     try:
@@ -98,6 +100,8 @@ def router_reboot():
 
 
 def ping(host):
+    # metodo utilizado para monitorar a conectividade de rede, o host tem que responder a pacotes ICMP para isso
+    # funcionar.
     # reference - https://stackoverflow.com/questions/2953462/pinging-servers-in-python
     """
     Returns True if host (str) responds to a ping request.
@@ -114,8 +118,8 @@ def ping(host):
 
 
 def test_reconnect_reboot():
-    # testa conectividade com a rede ip do access point e se falhar reenvia os dados corretos para apos o
-    # reboot o roteador se conectar na rede wifi corretamente
+    # testa conectividade com o roteador e reenvia os dados corretos coletados do AP para apos o
+    # reboot o roteador se conectar na rede wifi corretamente no modo cliente.
     if ping(config["router_IP"]):
         print("Procurando " + config["ssid"] + " ...")
         dado = get_wifi_data()
