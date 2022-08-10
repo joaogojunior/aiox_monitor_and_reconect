@@ -1,7 +1,6 @@
 import json
 from time import sleep
 import requests
-from requests.exceptions import ConnectionError
 import platform  # For getting the operating system name
 import subprocess  # For executing a shell command
 
@@ -82,7 +81,6 @@ def query_aps():
 def get_wifi_data():
     # faz a pesquisa dos APs proximos e filtra os resultados para apenas mostrar do ssid fornecido
     dados = query_aps()
-    # print(dados)
     wifi_data = list(filter(lambda x: x[0] == config["ssid"], dados))[0]
     return wifi_data
 
@@ -129,8 +127,8 @@ def router_reboot():
     print("Reiniciando roteador com novas configurações... Isso pode demorar alguns instantes...")
     try:
         requests.get(urlreboot, auth=(config["http_username"], config["http_password"]))
-    except ConnectionError:
-        print("Coneção com o roteador finalizada por timeout...")
+    except requests.exceptions.ConnectionError:
+        print("Conexão com o roteador finalizada por timeout...")
         pass
 
 
