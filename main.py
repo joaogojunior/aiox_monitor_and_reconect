@@ -5,42 +5,74 @@ from requests.exceptions import ConnectionError
 import platform  # For getting the operating system name
 import subprocess  # For executing a shell command
 
-# formato do config.json
-# {"wan_IP": "xxx.xxx.xxx.xxx", "router_IP": "zzz.zzz.zzz.zzz", "http_username": "admin", "http_password": "admin",
-# "ssid": "ssid1", "wifi_password": "changeme"}
-def load_config():
-    f = open('config.json')
-    return json.load(f)
+# declara variaveis globais
+config = dict()
+urlwds = ""
+urlpost = ""
+urlreboot = ""
 
-#carrega configuracoes do json
-config = load_config()
 
-urlwds = "http://" + config["router_IP"] + "/goform/WDSScan"
-urlpost = "http://" + config["router_IP"] + "/goform/wirelessMode"
-urlreboot = "http://" + config["router_IP"] + "/goform/SysToolReboot"
+def set_urlwds(ip):
+    global urlwds
+    urlwds = "http://" + ip + "/goform/WDSScan"
+
+
+def set_urlpost(ip):
+    global urlpost
+    urlpost = "http://" + ip + "/goform/wirelessMode"
+
+
+def set_urlreboot(ip):
+    global urlreboot
+    urlreboot = "http://" + ip + "/goform/SysToolReboot"
+
+
+def set_config(conf):
+    global config
+    config.update(conf)
+
+
+# carrega configuração do arquivo
+def load_json_config_dict(filename='config.json'):
+    try:
+        f = open(filename)
+        return json.load(f)
+    except IOError:
+        raise IOError('Arquivo de configuração não existe!')
 
 
 # funcao que faz um request pra url do roteador e retorna lista de APs no formato [ssid, mac, canal,
 # encriptação, sinal]
 def query_aps():
+    global config
     r = "<Response [401]>"
-
     # o loop é necessário pois o roteador aparentemente responde 401 na primeira tentativa por algum motivo.
     while str(r) == "<Response [401]>":
         try:
             # na primeira vez as vezes retorna "<Response [401]>" e executa sem erros, se isso ocorrer o loop é
             # executado novamente.
+            # se falhar com http 401 r recebe o valor "<Response [401]>" como resultado
             r = str(requests.get(urlwds, auth=(config["http_username"], config["http_password"])))
-        except ConnectionError as e:
-            # quando o request nao falha com 401, o roteador responde mas por alguma não conformidade com o protocolo
-            # http a resposta acaba causando com uma exceção, felizmente a resposta que o roteador forneceu é exposta
-            # tornando possível capturar o erro para extrair a resposta.
-            r = str(e)
+            if r == "<Response [401]>":
+                print("Recebeu <Response [401]> do roteador... tentando novamente...")
+        except requests.exceptions.ConnectionError as ce:
+            # garante que o loop so seria executado se a resposta fosse "<Response [401]>", o que não houve.
+            r = str(ce)
+            # se chegou aqui, das duas uma: ou ja temos a resposta em r ou não foi possivel se conectar ao roteador
+            # o que tambem gera um ConnectionError, mas nesse caso em r é exposto a seguinte frase "Max retries exceeded
+            # with url:", usaremos isso para diferenciar esses dois casos.
+            if "Max retries exceeded with url:" in r:
+                # nao foi possivel se conectar ao servidor, avisa e sai.
+                print("Erro não foi possivel se conectar ao roteador... por favor verifique se o ip esta correto.")
+                exit(1)
+            # enfim, se o request nao falha com 401 o roteador responde mas por alguma não conformidade com o protocolo
+            # http a resposta acaba causando uma exceção ConnectionError como vimos, felizmente a resposta que o
+            # roteador forneceu é exposta tornando possível capturar o erro e extrair a resposta a partir da variavel r.
     # r = "('Connection aborted.', BadStatusLine('SSID1,ab:bc:cd:de:ef:ff,1,AES  ,100  ;
     # SSID2,00:11:22:33:44:55,11,TKIP ,34   ;SSID3,ff:fe:ed:dc:cb:ba,13,NONE ,0    \r\n'))"
     # remove a porção inicial ate o segundo parentesis como tambem os parentesis e caracteres de escape ao final da
     # string, fazendo uma conversão para lista separando no ";"
-    lista_crua = ",".join(r[1:-1].split(",")[1:])[16:-6].split(";")
+    lista_crua = r[39:-6].split(";")
     # print(lista_crua)
     # quebra a lista em uma nova lista de listas, com todos os caracteres de espaco ao fim de cada item removidos
     saida = list(map(lambda x: list(map(lambda y: y.strip(), x.split(","))), lista_crua))
@@ -50,6 +82,7 @@ def query_aps():
 def get_wifi_data():
     # faz a pesquisa dos APs proximos e filtra os resultados para apenas mostrar do ssid fornecido
     dados = query_aps()
+    # print(dados)
     wifi_data = list(filter(lambda x: x[0] == config["ssid"], dados))[0]
     return wifi_data
 
@@ -68,7 +101,7 @@ def upload_wifi_data(wifi_data):
     data = {'wlMode': 1,
             'sta_ssid': wifi_data[0],
             'sta_mac': wifi_data[1],
-            'sta_channel': wifi_data[2],
+            'sta_channel': int(wifi_data[2]),
             'sta_security_mode': sec_mode[wifi_data[3]],
             'wep_mode': 0,
             'wep_default_key': 1,
@@ -83,10 +116,11 @@ def upload_wifi_data(wifi_data):
             }
     try:
         # realiza o post para a url do roteador para salvar os dados da rede wifi no modo cliente
-        r = requests.post(url=urlpost, data=data, auth=(config["http_username"], config["http_password"]))
+        requests.post(url=urlpost, data=data, auth=(config["http_username"], config["http_password"]))
         print("As configurações foram atualizadas!")
     except Exception as e:
         print("Error! Não foi possível salvar as configurações... " + str(e))
+        exit(1)
 
 
 def router_reboot():
@@ -95,7 +129,8 @@ def router_reboot():
     print("Reiniciando roteador com novas configurações... Isso pode demorar alguns instantes...")
     try:
         requests.get(urlreboot, auth=(config["http_username"], config["http_password"]))
-    except ConnectionError as e:
+    except ConnectionError:
+        print("Coneção com o roteador finalizada por timeout...")
         pass
 
 
@@ -117,6 +152,11 @@ def ping(host):
     return subprocess.call(command) == 0
 
 
+def test_wifi_is_conected():
+    # testa se a rede ip da rede wifi esta acessivel
+    return ping(config["wan_IP"])
+
+
 def test_reconnect_reboot():
     # testa conectividade com o roteador e reenvia os dados corretos coletados do AP para apos o
     # reboot o roteador se conectar na rede wifi corretamente no modo cliente.
@@ -131,21 +171,30 @@ def test_reconnect_reboot():
             sleep(5)
         print("Testando se a wifi conectou...")
         if test_wifi_is_conected():
-            print("Tudo pronto! :)")
+            print("Tudo ok! :)")
         else:
             print("A conexão com wifi não esta funcionando como o esperado... verifique manualmente...")
     else:
         print("Roteador está offline! :(")
 
 
-def test_wifi_is_conected():
-    # testa se a rede ip da rede wifi esta acessivel
-    return ping(config["wan_IP"])
-
-
-if __name__ == "__main__":
+def main():
+    global config
+    # carrega configuracoes do json
+    try:
+        config = load_json_config_dict()
+    except Exception as e:
+        print(str(e) + " - Copie o arquivo config.json.dummy para config.json e ajuste as opções para seu caso.")
+        exit(1)
+    set_urlwds(config["router_IP"])
+    set_urlpost(config["router_IP"])
+    set_urlreboot(config["router_IP"])
     # testa a conectividade com a rede wifi, se nao houver conectividade tenta reconectar
     if not test_wifi_is_conected():
         test_reconnect_reboot()
     else:
         print("Wifi está conectada! :>")
+
+
+if __name__ == "_main__":
+    main()
