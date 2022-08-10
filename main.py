@@ -1,3 +1,4 @@
+import sys
 import json
 from time import sleep
 import requests
@@ -63,7 +64,7 @@ def query_aps():
             if "Max retries exceeded with url:" in r:
                 # nao foi possivel se conectar ao servidor, avisa e sai.
                 print("Erro não foi possivel se conectar ao roteador... por favor verifique se o ip esta correto.")
-                exit(1)
+                sys.exit(1)
             # enfim, se o request nao falha com 401 o roteador responde mas por alguma não conformidade com o protocolo
             # http a resposta acaba causando uma exceção ConnectionError como vimos, felizmente a resposta que o
             # roteador forneceu é exposta tornando possível capturar o erro e extrair a resposta a partir da variavel r.
@@ -118,7 +119,7 @@ def upload_wifi_data(wifi_data):
         print("As configurações foram atualizadas!")
     except Exception as e:
         print("Error! Não foi possível salvar as configurações... " + str(e))
-        exit(1)
+        sys.exit(1)
 
 
 def router_reboot():
@@ -183,7 +184,7 @@ def main():
         config = load_json_config_dict()
     except Exception as e:
         print(str(e) + " - Copie o arquivo config.json.dummy para config.json e ajuste as opções para seu caso.")
-        exit(1)
+        sys.exit(1)
     set_urlwds(config["router_IP"])
     set_urlpost(config["router_IP"])
     set_urlreboot(config["router_IP"])

@@ -53,7 +53,7 @@ class TestMain(unittest.TestCase):
     @mock.patch('main.requests.get')
     def test_cannot_connect_to_router_and_exit_with_error(self, mock_http_get):
         mock_http_get.side_effect = requests.exceptions.ConnectionError("Max retries exceeded with url: teste")
-        with mock.patch('builtins.exit') as mock_exit:
+        with mock.patch('main.sys.exit') as mock_exit:
             main.query_aps()
             self.assertTrue(mock_exit.called)
 
@@ -65,7 +65,7 @@ class TestMain(unittest.TestCase):
         mock_http_get.side_effect = ["<Response [401]>", requests.exceptions.ConnectionError(
             "('Connection aborted.', BadStatusLine('SSID1,ab:bc:cd:de:ef:ff,1,AES  ,100  ;SSID2,00:11:22:33:44:55,11,"
             "TKIP ,34   ;SSID3,ff:fe:ed:dc:cb:ba,13,NONE ,0    \r\n'))")]
-        with mock.patch('builtins.exit') as mock_exit:
+        with mock.patch('main.sys.exit') as mock_exit:
             dados = main.query_aps()
             # testa se nao atingiu o exit e se dados retornou corretamente
             self.assertFalse(mock_exit.called)
@@ -113,7 +113,7 @@ class TestMain(unittest.TestCase):
     def test_cannot_post_to_router_network_error(self, mock_http_post):
         mock_http_post.side_effect = requests.exceptions.ConnectionError("Sem internet :(")
         wifi_data = ['SSID1', 'ab:bc:cd:de:ef:ff', '1', 'AES', '100']
-        with mock.patch('builtins.exit') as mock_exit:
+        with mock.patch('main.sys.exit') as mock_exit:
             main.upload_wifi_data(wifi_data)
             self.assertTrue(mock_exit.called)
 
